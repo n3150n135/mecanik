@@ -1,0 +1,1054 @@
+<html><head><base href="https://workshop-manager.app/">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sistema de Gestión de Taller Automotriz</title>
+<link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/react@17.0.2/umd/react.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/react-dom@17.0.2/umd/react-dom.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/redux@4.1.2/dist/redux.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/react-redux@7.2.6/dist/react-redux.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/axios@0.24.0/dist/axios.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/socket.io-client@4.4.0/dist/socket.io.min.js"></script>
+<script src="https://js.stripe.com/v3/"></script>
+<script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
+<style>
+  :root {
+    --primary-color: #3498db;
+    --secondary-color: #2c3e50;
+    --accent-color: #e74c3c;
+    --background-color: #ecf0f1;
+    --text-color: #34495e;
+  }
+  body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: var(--background-color);
+    color: var(--text-color);
+  }
+  .btn-primary {
+    background-color: var(--primary-color);
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 0.25rem;
+    transition: background-color 0.3s ease;
+  }
+  .btn-primary:hover {
+    background-color: #2980b9;
+  }
+  .card {
+    background-color: white;
+    border-radius: 0.5rem;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+  .form-input {
+    width: 100%;
+    padding: 0.5rem;
+    border: 1px solid #ccc;
+    border-radius: 0.25rem;
+    margin-bottom: 1rem;
+  }
+  .form-label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: bold;
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect } = React;
+const { Provider, useSelector, useDispatch } = ReactRedux;
+
+const initialState = {
+  customers: [],
+  vehicles: [],
+  repairs: [],
+  refacciones: [],
+  payments: [],
+  notifications: [],
+};
+
+function rootReducer(state = initialState, action) {
+  switch (action.type) {
+    case 'SET_CUSTOMERS':
+      return { ...state, customers: action.payload };
+    case 'SET_VEHICLES':
+      return { ...state, vehicles: action.payload };
+    case 'SET_REPAIRS':
+      return { ...state, repairs: action.payload };
+    case 'SET_REFACCIONES':
+      return { ...state, refacciones: action.payload };
+    case 'SET_PAYMENTS':
+      return { ...state, payments: action.payload };
+    case 'ADD_NOTIFICATION':
+      return { ...state, notifications: [...state.notifications, action.payload] };
+    case 'REMOVE_NOTIFICATION':
+      return { ...state, notifications: state.notifications.filter(n => n.id !== action.payload) };
+    default:
+      return state;
+  }
+}
+
+const store = Redux.createStore(rootReducer);
+
+function App() {
+  const [currentView, setCurrentView] = useState('dashboard');
+
+  return (
+    <Provider store={store}>
+      <div className="flex h-screen bg-gray-100">
+        <Sidebar setCurrentView={setCurrentView} />
+        <div className="flex-1 overflow-x-hidden overflow-y-auto">
+          <Encabezado />
+          <Notificaciones />
+          <main className="p-6">
+            {currentView === 'dashboard' && <PanelDeControl />}
+            {currentView === 'customers' && <GestionDeClientes />}
+            {currentView === 'vehicles' && <GestionDeVehiculos />}
+            {currentView === 'repairs' && <GestionDeReparaciones />}
+            {currentView === 'refacciones' && <GestionDeRefacciones />}
+            {currentView === 'payments' && <GestionDePagos />}
+            {currentView === 'reports' && <PanelDeInformes />}
+            {currentView === 'cotizacion' && <CotizacionCliente />}
+          </main>
+          <PieDePagina />
+        </div>
+      </div>
+    </Provider>
+  );
+}
+
+function Sidebar({ setCurrentView }) {
+  const menuItems = [
+    { name: 'Dashboard', view: 'dashboard', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
+    { name: 'Clientes', view: 'customers', icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z' },
+    { name: 'Vehículos', view: 'vehicles', icon: 'M19 16l-2 2m0 0l-2-2m2 2V8m0 0l2 2m-2-2l-2 2' },
+    { name: 'Reparaciones', view: 'repairs', icon: 'M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z' },
+    { name: 'Refacciones', view: 'refacciones', icon: 'M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z' },
+    { name: 'Pagos', view: 'payments', icon: 'M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z' },
+    { name: 'Informes', view: 'reports', icon: 'M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
+    { name: 'Cotización Cliente', view: 'cotizacion', icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
+  ];
+
+  return (
+    <div className="bg-gray-800 text-white w-64 space-y-6 py-7 px-2">
+      <h2 className="text-2xl font-semibold text-center">Taller Automotriz</h2>
+      <nav>
+        {menuItems.map((item) => (
+          <a
+            key={item.view}
+            href="#"
+            className="block py-2.5 px-4 rounded transition duration-200 hover:bg-gray-700"
+            onClick={() => setCurrentView(item.view)}
+          >
+            <svg className="h-6 w-6 inline-block mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={item.icon} />
+            </svg>
+            {item.name}
+          </a>
+        ))}
+      </nav>
+    </div>
+  );
+}
+
+function Encabezado() {
+  return (
+    <header className="bg-white shadow">
+      <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+        <h1 className="text-3xl font-bold text-gray-900">Sistema de Gestión de Taller Automotriz</h1>
+      </div>
+    </header>
+  );
+}
+
+function Notificaciones() {
+  const notifications = useSelector(state => state.notifications);
+  const dispatch = useDispatch();
+
+  const removeNotification = (id) => {
+    dispatch({ type: 'REMOVE_NOTIFICATION', payload: id });
+  };
+
+  return (
+    <div className="fixed top-0 right-0 m-4">
+      {notifications.map(notification => (
+        <div key={notification.id} className="bg-blue-500 text-white p-2 mb-2 rounded">
+          {notification.message}
+          <button onClick={() => removeNotification(notification.id)} className="ml-2">×</button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function PanelDeControl() {
+  const repairs = useSelector(state => state.repairs);
+  const refacciones = useSelector(state => state.refacciones);
+  const payments = useSelector(state => state.payments);
+
+  return (
+    <section className="card">
+      <h2 className="text-2xl font-bold mb-4">Panel de Control</h2>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <DashboardCard title="Reparaciones Activas" value={repairs.filter(r => r.status === 'active').length} />
+        <DashboardCard title="Reparaciones Completadas" value={repairs.filter(r => r.status === 'completed').length} />
+        <DashboardCard title="Refacciones en Stock" value={refacciones.reduce((acc, item) => acc + item.quantity, 0)} />
+        <DashboardCard title="Alertas de Refacciones" value={refacciones.filter(item => item.quantity < item.minThreshold).length} />
+      </div>
+    </section>
+  );
+}
+
+function DashboardCard({ title, value }) {
+  return (
+    <div className="bg-white p-4 rounded shadow">
+      <h3 className="text-lg font-semibold mb-2">{title}</h3>
+      <p className="text-3xl font-bold">{value}</p>
+    </div>
+  );
+}
+
+function GestionDeClientes() {
+  const [newCustomer, setNewCustomer] = useState({ name: '', email: '', phone: '' });
+  const [showDatabase, setShowDatabase] = useState(false);
+  const customers = useSelector(state => state.customers);
+  const dispatch = useDispatch();
+
+  const handleInputChange = (e) => {
+    setNewCustomer({ ...newCustomer, [e.target.name]: e.target.value });
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    const newCustomerId = `CL${Date.now()}`;
+    dispatch({ type: 'SET_CUSTOMERS', payload: [...customers, { ...newCustomer, id: newCustomerId }] });
+    setNewCustomer({ name: '', email: '', phone: '' });
+  };
+
+  const toggleDatabase = () => {
+    setShowDatabase(!showDatabase);
+  };
+
+  return (
+    <section className="mb-6">
+      <h2 className="text-2xl font-bold mb-4">Gestión de Clientes</h2>
+      <button onClick={toggleDatabase} className="btn-primary mb-4">Ver Base de Datos de Clientes</button>
+      <form onSubmit={handleSubmit}>
+        <div className="mb-4">
+          <label htmlFor="name" className="form-label">Nombre</label>
+          <input
+            type="text"
+            id="name"
+            name="name"
+            value={newCustomer.name}
+            onChange={handleInputChange}
+            className="form-input"
+            required
+          />
+        </div>
+        <div className="mb-4">
+          <label htmlFor="email" className="form-label">Correo Electrónico</label>
+          <input
+            type="email"
+            id="email"
+            name="email"
+            value={newCustomer.email}
+            onChange={handleInputChange}
+            className="form-input"
+            required
+          />
+        </div>
+        <div className="mb-4">
+          <label htmlFor="phone" className="form-label">Teléfono</label>
+          <input
+            type="tel"
+            id="phone"
+            name="phone"
+            value={newCustomer.phone}
+            onChange={handleInputChange}
+            className="form-input"
+            required
+          />
+        </div>
+        <button type="submit" className="btn-primary">Agregar Cliente</button>
+      </form>
+      <div className="mt-6">
+        <h3 className="text-xl font-semibold mb-2">Lista de Clientes</h3>
+        <ul>
+          {customers.map(customer => (
+            <li key={customer.id} className="mb-2">
+              ID: {customer.id} - {customer.name} - {customer.email} - {customer.phone}
+            </li>
+          ))}
+        </ul>
+      </div>
+      {showDatabase && <CustomerDatabaseModal customers={customers} onClose={toggleDatabase} />}
+    </section>
+  );
+}
+
+function CustomerDatabaseModal({ customers, onClose }) {
+  return (
+    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full" id="my-modal">
+      <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+        <div className="mt-3 text-center">
+          <h3 className="text-lg leading-6 font-medium text-gray-900">Base de Datos de Clientes</h3>
+          <div className="mt-2 px-7 py-3">
+            <table className="w-full text-sm text-left text-gray-500">
+              <thead className="text-xs text-gray-700 uppercase bg-gray-100">
+                <tr>
+                  <th scope="col" className="px-6 py-3">ID</th>
+                  <th scope="col" className="px-6 py-3">Nombre</th>
+                  <th scope="col" className="px-6 py-3">Email</th>
+                  <th scope="col" className="px-6 py-3">Teléfono</th>
+                </tr>
+              </thead>
+              <tbody>
+                {customers.map(customer => (
+                  <tr key={customer.id} className="bg-white border-b">
+                    <td className="px-6 py-4">{customer.id}</td>
+                    <td className="px-6 py-4">{customer.name}</td>
+                    <td className="px-6 py-4">{customer.email}</td>
+                    <td className="px-6 py-4">{customer.phone}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="items-center px-4 py-3">
+            <button
+              id="ok-btn"
+              className="px-4 py-2 bg-blue-500 text-white text-base font-medium rounded-md w-full shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300"
+              onClick={onClose}
+            >
+              Cerrar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function GestionDeVehiculos() {
+  const [newVehicle, setNewVehicle] = useState({ 
+    make: '', 
+    model: '', 
+    year: '', 
+    licensePlate: '', 
+    customerId: '',
+    vin: '',
+    color: '',
+    transmission: ''
+  });
+  const vehicles = useSelector(state => state.vehicles);
+  const customers = useSelector(state => state.customers);
+  const dispatch = useDispatch();
+
+  const handleInputChange = (e) => {
+    setNewVehicle({ ...newVehicle, [e.target.name]: e.target.value });
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    const customer = customers.find(c => c.id === newVehicle.customerId);
+    dispatch({ type: 'SET_VEHICLES', payload: [...vehicles, { ...newVehicle, id: `VH${Date.now()}`, customerId: customer.id }] });
+    setNewVehicle({ 
+      make: '', 
+      model: '', 
+      year: '', 
+      licensePlate: '', 
+      customerId: '',
+      vin: '',
+      color: '',
+      transmission: ''
+    });
+  };
+
+  return (
+    <section className="mb-6">
+      <h2 className="text-2xl font-bold mb-4">Gestión de Vehículos</h2>
+      <form onSubmit={handleSubmit}>
+        <div className="mb-4">
+          <label htmlFor="make" className="form-label">Marca</label>
+          <input
+            type="text"
+            id="make"
+            name="make"
+            value={newVehicle.make}
+            onChange={handleInputChange}
+            className="form-input"
+            required
+          />
+        </div>
+        <div className="mb-4">
+          <label htmlFor="model" className="form-label">Modelo</label>
+          <input
+            type="text"
+            id="model"
+            name="model"
+            value={newVehicle.model}
+            onChange={handleInputChange}
+            className="form-input"
+            required
+          />
+        </div>
+        <div className="mb-4">
+          <label htmlFor="year" className="form-label">Año</label>
+          <input
+            type="number"
+            id="year"
+            name="year"
+            value={newVehicle.year}
+            onChange={handleInputChange}
+            className="form-input"
+            required
+          />
+        </div>
+        <div className="mb-4">
+          <label htmlFor="licensePlate" className="form-label">Matrícula</label>
+          <input
+            type="text"
+            id="licensePlate"
+            name="licensePlate"
+            value={newVehicle.licensePlate}
+            onChange={handleInputChange}
+            className="form-input"
+            required
+          />
+        </div>
+        <div className="mb-4">
+          <label htmlFor="vin" className="form-label">VIN</label>
+          <input
+            type="text"
+            id="vin"
+            name="vin"
+            value={newVehicle.vin}
+            onChange={handleInputChange}
+            className="form-input"
+            required
+          />
+        </div>
+        <div className="mb-4">
+          <label htmlFor="color" className="form-label">Color</label>
+          <input
+            type="text"
+            id="color"
+            name="color"
+            value={newVehicle.color}
+            onChange={handleInputChange}
+            className="form-input"
+            required
+          />
+        </div>
+        <div className="mb-4">
+          <label htmlFor="transmission" className="form-label">Transmisión</label>
+          <select
+            id="transmission"
+            name="transmission"
+            value={newVehicle.transmission}
+            onChange={handleInputChange}
+            className="form-input"
+            required
+          >
+            <option value="">Seleccione una transmisión</option>
+            <option value="manual">Manual</option>
+            <option value="automatica">Automática</option>
+          </select>
+        </div>
+        <div className="mb-4">
+          <label htmlFor="customerId" className="form-label">Cliente</label>
+          <select
+            id="customerId"
+            name="customerId"
+            value={newVehicle.customerId}
+            onChange={handleInputChange}
+            className="form-input"
+            required
+          >
+            <option value="">Seleccione un cliente</option>
+            {customers.map(customer => (
+              <option key={customer.id} value={customer.id}>{customer.name}</option>
+            ))}
+          </select>
+        </div>
+        <button type="submit" className="btn-primary">Agregar Vehículo</button>
+      </form>
+      <div className="mt-6">
+        <h3 className="text-xl font-semibold mb-2">Lista de Vehículos</h3>
+        <ul>
+          {vehicles.map(vehicle => (
+            <li key={vehicle.id} className="mb-2">
+              {vehicle.make} {vehicle.model} ({vehicle.year}) - Matrícula: {vehicle.licensePlate} - 
+              VIN: {vehicle.vin} - Color: {vehicle.color} - Transmisión: {vehicle.transmission}
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
+  );
+}
+
+function GestionDeReparaciones() {
+  const [newRepair, setNewRepair] = useState({ vehicleId: '', description: '', status: 'pending', cost: '' });
+  const repairs = useSelector(state => state.repairs);
+  const vehicles = useSelector(state => state.vehicles);
+  const dispatch = useDispatch();
+
+  const handleInputChange = (e) => {
+    setNewRepair({ ...newRepair, [e.target.name]: e.target.value });
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    const vehicle = vehicles.find(v => v.id === newRepair.vehicleId);
+    const customerId = vehicle ? vehicle.customerId : '';
+    dispatch({ type: 'SET_REPAIRS', payload: [...repairs, { ...newRepair, id: `RP${Date.now()}`, customerId, dateCreated: new Date().toISOString() }] });
+    setNewRepair({ vehicleId: '', description: '', status: 'pending', cost: '' });
+  };
+
+  return (
+    <section className="mb-6">
+      <h2 className="text-2xl font-bold mb-4">Gestión de Reparaciones</h2>
+      <form onSubmit={handleSubmit}>
+        <div className="mb-4">
+          <label htmlFor="vehicleId" className="form-label">Vehículo</label>
+          <select
+            id="vehicleId"
+            name="vehicleId"
+            value={newRepair.vehicleId}
+            onChange={handleInputChange}
+            className="form-input"
+            required
+          >
+            <option value="">Seleccione un vehículo</option>
+            {vehicles.map(vehicle => (
+              <option key={vehicle.id} value={vehicle.id}>{vehicle.make} {vehicle.model} - {vehicle.licensePlate}</option>
+            ))}
+          </select>
+        </div>
+        <div className="mb-4">
+          <label htmlFor="description" className="form-label">Descripción</label>
+          <textarea
+            id="description"
+            name="description"
+            value={newRepair.description}
+            onChange={handleInputChange}
+            className="form-input"
+            required
+          ></textarea>
+        </div>
+        <div className="mb-4">
+          <label htmlFor="status" className="form-label">Estado</label>
+          <select
+            id="status"
+            name="status"
+            value={newRepair.status}
+            onChange={handleInputChange}
+            className="form-input"
+            required
+          >
+            <option value="pending">Pendiente</option>
+            <option value="in_progress">En Progreso</option>
+            <option value="completed">Completado</option>
+          </select>
+        </div>
+        <div className="mb-4">
+          <label htmlFor="cost" className="form-label">Costo Estimado</label>
+          <input
+            type="number"
+            id="cost"
+            name="cost"
+            value={newRepair.cost}
+            onChange={handleInputChange}
+            className="form-input"
+            required
+          />
+        </div>
+        <button type="submit" className="btn-primary">Agregar Reparación</button>
+      </form>
+      <div className="mt-6">
+        <h3 className="text-xl font-semibold mb-2">Lista de Reparaciones</h3>
+        <ul>
+          {repairs.map(repair => {
+            const vehicle = vehicles.find(v => v.id === repair.vehicleId);
+            return (
+              <li key={repair.id} className="mb-2">
+                Vehículo: {vehicle ? vehicle.licensePlate : 'N/A'} - 
+                Estado: {repair.status} - 
+                Costo: ${repair.cost}
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    </section>
+  );
+}
+
+function GestionDeRefacciones() {
+  const [newItem, setNewItem] = useState({ 
+    name: '', 
+    quantity: '', 
+    price: '', 
+    supplier: '', 
+    purchasePrice: '', 
+    usageCount: '',
+    repairId: ''
+  });
+  const refacciones = useSelector(state => state.refacciones);
+  const repairs = useSelector(state => state.repairs);
+  const vehicles = useSelector(state => state.vehicles);
+  const customers = useSelector(state => state.customers);
+  const dispatch = useDispatch();
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setNewItem(prevItem => {
+      const updatedItem = { ...prevItem, [name]: value };
+      
+      if (name === 'purchasePrice' || name === 'usageCount') {
+        const purchasePrice = parseFloat(updatedItem.purchasePrice) || 0;
+        const usageCount = parseInt(updatedItem.usageCount) || 1;
+        updatedItem.price = (purchasePrice * 1.27 * usageCount).toFixed(2);
+      }
+      
+      return updatedItem;
+    });
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    const repair = repairs.find(r => r.id === newItem.repairId);
+    const customerId = repair ? repair.customerId : '';
+    dispatch({ type: 'SET_REFACCIONES', payload: [...refacciones, { ...newItem, id: `RF${Date.now()}`, customerId }] });
+    setNewItem({ 
+      name: '', 
+      quantity: '', 
+      price: '', 
+      supplier: '', 
+      purchasePrice: '', 
+      usageCount: '',
+      repairId: ''
+    });
+  };
+
+  return (
+    <section className="mb-6">
+      <h2 className="text-2xl font-bold mb-4">Gestión de Refacciones</h2>
+      <form onSubmit={handleSubmit}>
+        <div className="mb-4">
+          <label htmlFor="name" className="form-label">Nombre del Artículo</label>
+          <input
+            type="text"
+            id="name"
+            name="name"
+            value={newItem.name}
+            onChange={handleInputChange}
+            className="form-input"
+            required
+          />
+        </div>
+        <div className="mb-4">
+          <label htmlFor="quantity" className="form-label">Cantidad</label>
+          <input
+            type="number"
+            id="quantity"
+            name="quantity"
+            value={newItem.quantity}
+            onChange={handleInputChange}
+            className="form-input"
+            required
+          />
+        </div>
+        <div className="mb-4">
+          <label htmlFor="purchasePrice" className="form-label">Costo de Compra</label>
+          <input
+            type="number"
+            id="purchasePrice"
+            name="purchasePrice"
+            value={newItem.purchasePrice}
+            onChange={handleInputChange}
+            className="form-input"
+            required
+          />
+        </div>
+        <div className="mb-4">
+          <label htmlFor="price" className="form-label">Precio de Venta al Público</label>
+          <input
+            type="number"
+            id="price"
+            name="price"
+            value={newItem.price}
+            className="form-input"
+            readOnly
+          />
+        </div>
+        <div className="mb-4">
+          <label htmlFor="supplier" className="form-label">Proveedor</label>
+          <input
+            type="text"
+            id="supplier"
+            name="supplier"
+            value={newItem.supplier}
+            onChange={handleInputChange}
+            className="form-input"
+            required
+          />
+        </div>
+        <div className="mb-4">
+          <label htmlFor="usageCount" className="form-label">Número de Refacciones a Usar</label>
+          <input
+            type="number"
+            id="usageCount"
+            name="usageCount"
+            value={newItem.usageCount}
+            onChange={handleInputChange}
+            className="form-input"
+            required
+          />
+        </div>
+        <div className="mb-4">
+          <label htmlFor="repairId" className="form-label">Reparación Asociada</label>
+          <select
+            id="repairId"
+            name="repairId"
+            value={newItem.repairId}
+            onChange={handleInputChange}
+            className="form-input"
+            required
+          >
+            <option value="">Seleccione una reparación</option>
+            {repairs.map(repair => {
+              const vehicle = vehicles.find(v => v.id === repair.vehicleId);
+              const customer = vehicle ? customers.find(c => c.id === vehicle.customerId) : null;
+              return (
+                <option key={repair.id} value={repair.id}>
+                  ID: {repair.id} - Cliente: {customer ? customer.name : 'N/A'} - Vehículo: {vehicle ? `${vehicle.make} ${vehicle.model}` : 'N/A'}
+                </option>
+              );
+            })}
+          </select>
+        </div>
+        <button type="submit" className="btn-primary">Agregar Artículo</button>
+      </form>
+      <div className="mt-6">
+        <h3 className="text-xl font-semibold mb-2">Refacciones Actuales</h3>
+        <ul>
+          {refacciones.map(item => {
+            const repair = repairs.find(r => r.id === item.repairId);
+            const vehicle = repair ? vehicles.find(v => v.id === repair.vehicleId) : null;
+            const customer = vehicle ? customers.find(c => c.id === vehicle.customerId) : null;
+            return (
+              <li key={item.id} className="mb-2">
+                {item.name} - Cantidad: {item.quantity} - Precio de Venta al Público: ${item.price} - 
+                Proveedor: {item.supplier} - Costo de Compra: ${item.purchasePrice} - 
+                Refacciones a Usar: {item.usageCount} -
+                Cliente: {customer ? customer.name : 'N/A'} -
+                Vehículo: {vehicle ? `${vehicle.make} ${vehicle.model}` : 'N/A'}
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    </section>
+  );
+}
+
+function GestionDePagos() {
+  const [newPayment, setNewPayment] = useState({ repairId: '', amount: '', method: '' });
+  const payments = useSelector(state => state.payments);
+  const repairs = useSelector(state => state.repairs);
+  const dispatch = useDispatch();
+
+  const handleInputChange = (e) => {
+    setNewPayment({ ...newPayment, [e.target.name]: e.target.value });
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    const repair = repairs.find(r => r.id === newPayment.repairId);
+    const customerId = repair ? repair.customerId : '';
+    dispatch({ type: 'SET_PAYMENTS', payload: [...payments, { ...newPayment, id: `PY${Date.now()}`, date: new Date().toISOString(), customerId }] });
+    setNewPayment({ repairId: '', amount: '', method: '' });
+  };
+
+  return (
+    <section className="mb-6">
+      <h2 className="text-2xl font-bold mb-4">Gestión de Pagos</h2>
+      <form onSubmit={handleSubmit}>
+        <div className="mb-4">
+          <label htmlFor="repairId" className="form-label">Reparación</label>
+          <select
+            id="repairId"
+            name="repairId"
+            value={newPayment.repairId}
+            onChange={handleInputChange}
+            className="form-input"
+            required
+          >
+            <option value="">Seleccione una reparación</option>
+            {repairs.map(repair => (
+              <option key={repair.id} value={repair.id}>ID: {repair.id} - Costo: ${repair.cost}</option>
+            ))}
+          </select>
+        </div>
+        <div className="mb-4">
+          <label htmlFor="amount" className="form-label">Monto</label>
+          <input
+            type="number"
+            id="amount"
+            name="amount"
+            value={newPayment.amount}
+            onChange={handleInputChange}
+            className="form-input"
+            required
+          />
+        </div>
+        <div className="mb-4">
+          <label htmlFor="method" className="form-label">Método de Pago</label>
+          <select
+            id="method"
+            name="method"
+            value={newPayment.method}
+            onChange={handleInputChange}
+            className="form-input"
+            required
+          >
+            <option value="">Seleccione un método</option>
+            <option value="efectivo">Efectivo</option>
+            <option value="tarjeta">Tarjeta</option>
+            <option value="transferencia">Transferencia</option>
+          </select>
+        </div>
+        <button type="submit" className="btn-primary">Registrar Pago</button>
+      </form>
+      <div className="mt-6">
+        <h3 className="text-xl font-semibold mb-2">Historial de Pagos</h3>
+        <ul>
+          {payments.map(payment => (
+            <li key={payment.id} className="mb-2">
+              ID Reparación: {payment.repairId} - Monto: ${payment.amount} - Método: {payment.method} - Fecha: {new Date(payment.date).toLocaleString()}
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
+  );
+}
+
+function PanelDeInformes() {
+  const repairs = useSelector(state => state.repairs);
+  const payments = useSelector(state => state.payments);
+  const customers = useSelector(state => state.customers);
+  const vehicles = useSelector(state => state.vehicles);
+
+  const totalRevenue = payments.reduce((sum, payment) => sum + parseFloat(payment.amount), 0);
+  const averageRepairCost = repairs.length > 0 ? repairs.reduce((sum, repair) => sum + parseFloat(repair.cost), 0) / repairs.length : 0;
+  const completedRepairs = repairs.filter(repair => repair.status === 'completed').length;
+
+  const customerRepairStats = customers.map(customer => {
+    const customerRepairs = repairs.filter(r => r.customerId === customer.id);
+    const totalRepairCost = customerRepairs.reduce((sum, repair) => sum + parseFloat(repair.cost), 0);
+    return {
+      customerId: customer.id,
+      customerName: customer.name,
+      repairCount: customerRepairs.length,
+      totalRepairCost
+    };
+  });
+
+  return (
+    <section className="mb-6">
+      <h2 className="text-2xl font-bold mb-4">Panel de Informes</h2>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+        <div className="bg-white p-4 rounded shadow">
+          <h3 className="text-lg font-semibold mb-2">Ingresos Totales</h3>
+          <p className="text-3xl font-bold">${totalRevenue.toFixed(2)}</p>
+        </div>
+        <div className="bg-white p-4 rounded shadow">
+          <h3 className="text-lg font-semibold mb-2">Costo Promedio de Reparación</h3>
+          <p className="text-3xl font-bold">${averageRepairCost.toFixed(2)}</p>
+        </div>
+        <div className="bg-white p-4 rounded shadow">
+          <h3 className="text-lg font-semibold mb-2">Reparaciones Completadas</h3>
+          <p className="text-3xl font-bold">{completedRepairs}</p>
+        </div>
+      </div>
+      <div className="bg-white p-4 rounded shadow mt-4">
+        <h3 className="text-lg font-semibold mb-2">Estadísticas por Cliente</h3>
+        <ul>
+          {customerRepairStats.map(stat => (
+            <li key={stat.customerId}>
+              Cliente ID: {stat.customerId} - Nombre: {stat.customerName} - 
+              Reparaciones: {stat.repairCount} - Costo Total: ${stat.totalRepairCost.toFixed(2)}
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
+  );
+}
+
+function CotizacionCliente() {
+  const [cotizacion, setCotizacion] = useState({
+    numeroCliente: '',
+    fecha: new Date().toISOString().split('T')[0],
+    clienteId: '',
+    vehiculoId: '',
+    reparacionId: '',
+    refacciones: [],
+  });
+
+  const customers = useSelector(state => state.customers);
+  const vehicles = useSelector(state => state.vehicles);
+  const repairs = useSelector(state => state.repairs);
+  const refacciones = useSelector(state => state.refacciones);
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setCotizacion(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    const newCotizacionId = `CT${Date.now()}`;
+    console.log('Cotización submitted:', { ...cotizacion, id: newCotizacionId });
+  };
+
+  const selectedCustomer = customers.find(c => c.id === cotizacion.clienteId);
+  const selectedVehicle = vehicles.find(v => v.id === cotizacion.vehiculoId);
+  const selectedRepair = repairs.find(r => r.id === cotizacion.reparacionId);
+
+  const subtotal = selectedRepair ? parseFloat(selectedRepair.cost) : 0;
+  const iva = subtotal * 0.16;
+  const total = subtotal + iva;
+
+  return (
+    <section className="mb-6">
+      <h2 className="text-2xl font-bold mb-4">Cotización Cliente</h2>
+      <form onSubmit={handleSubmit} className="bg-white p-6 rounded shadow">
+        <div className="grid grid-cols-2 gap-4 mb-4">
+          <div>
+            <label className="form-label">Número de Cliente</label>
+            <input
+              type="text"
+              name="numeroCliente"
+              value={cotizacion.numeroCliente}
+              onChange={handleInputChange}
+              className="form-input"
+              required
+            />
+          </div>
+          <div>
+            <label className="form-label">Fecha</label>
+            <input
+              type="date"
+              name="fecha"
+              value={cotizacion.fecha}
+              onChange={handleInputChange}
+              className="form-input"
+              required
+            />
+          </div>
+        </div>
+        <div className="mb-4">
+          <label className="form-label">Cliente</label>
+          <select
+            name="clienteId"
+            value={cotizacion.clienteId}
+            onChange={handleInputChange}
+            className="form-input"
+            required
+          >
+            <option value="">Seleccione un cliente</option>
+            {customers.map(customer => (
+              <option key={customer.id} value={customer.id}>{customer.name}</option>
+            ))}
+          </select>
+        </div>
+        <div className="mb-4">
+          <label className="form-label">Vehículo</label>
+          <select
+            name="vehiculoId"
+            value={cotizacion.vehiculoId}
+            onChange={handleInputChange}
+            className="form-input"
+            required
+          >
+            <option value="">Seleccione un vehículo</option>
+            {vehicles.filter(v => v.customerId === cotizacion.clienteId).map(vehicle => (
+              <option key={vehicle.id} value={vehicle.id}>{vehicle.make} {vehicle.model} ({vehicle.year})</option>
+            ))}
+          </select>
+        </div>
+        <div className="mb-4">
+          <label className="form-label">Reparación</label>
+          <select
+            name="reparacionId"
+            value={cotizacion.reparacionId}
+            onChange={handleInputChange}
+            className="form-input"
+            required
+          >
+            <option value="">Seleccione una reparación</option>
+            {repairs.filter(r => r.vehicleId === cotizacion.vehiculoId).map(repair => (
+              <option key={repair.id} value={repair.id}>{repair.description}</option>
+            ))}
+          </select>
+        </div>
+        <div className="mb-4">
+          <h3 className="text-lg font-semibold mb-2">Detalles de la Cotización</h3>
+          <table className="w-full">
+            <thead>
+              <tr>
+                <th>Refacción</th>
+                <th>Cantidad</th>
+                <th>Precio Unitario</th>
+                <th>Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {refacciones.filter(r => r.repairId === cotizacion.reparacionId).map(refaccion => (
+                <tr key={refaccion.id}>
+                  <td>{refaccion.name}</td>
+                  <td>{refaccion.usageCount}</td>
+                  <td>${refaccion.price}</td>
+                  <td>${(refaccion.price * refaccion.usageCount).toFixed(2)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="grid grid-cols-2 gap-4 mb-4">
+          <div>
+            <p><strong>Subtotal:</strong> ${subtotal.toFixed(2)}</p>
+            <p><strong>IVA (16%):</strong> ${iva.toFixed(2)}</p>
+            <p><strong>Total:</strong> ${total.toFixed(2)}</p>
+          </div>
+          <div>
+            <button type="submit" className="btn-primary w-full">Generar Cotización</button>
+          </div>
+        </div>
+      </form>
+    </section>
+  );
+}
+
+function PieDePagina() {
+  return (
+    <footer className="bg-gray-800 text-white p-4 mt-8">
+      <div className="container mx-auto text-center">
+        <p>&copy; 2023 Sistema de Gestión de Taller Automotriz. Todos los derechos reservados.</p>
+      </div>
+    </footer>
+  );
+}
+
+ReactDOM.render(<App />, document.getElementById('root'));
+</script>
+</body>
+</html>
